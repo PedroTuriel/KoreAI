@@ -1,12 +1,12 @@
 from fastapi import FastAPI, Request
+from fastapi.responses import FileResponse
 import pandas as pd
 import os
 
 app = FastAPI()
 
-# Carpeta donde se guardarán los archivos
-UPLOAD_FOLDER = "files"
-os.makedirs(UPLOAD_FOLDER, exist_ok=True)
+# Directorio seguro en Railway para guardar archivos temporalmente
+UPLOAD_FOLDER = "/tmp"
 
 @app.post("/generate_excel")
 async def generate_excel(request: Request):
@@ -17,8 +17,8 @@ async def generate_excel(request: Request):
         return {"error": "No incidents received"}
 
     # Convert incidents to DataFrame
-    df = pd.DataFrame(incidents)
     file_path = os.path.join(UPLOAD_FOLDER, "incident_report.xlsx")
+    df = pd.DataFrame(incidents)
     df.to_excel(file_path, index=False)
 
     # Generar enlace de descarga desde Railway
@@ -30,5 +30,5 @@ async def generate_excel(request: Request):
 async def download_file(filename: str):
     file_path = os.path.join(UPLOAD_FOLDER, filename)
     if os.path.exists(file_path):
-        return {"message": "File available", "download_url": f"https://your-railway-app.up.railway.app/files/{filename}"}
+        return FileResponse(file_path, filename=filename, media_type="application/vnd.ms-excel")
     return {"error": "File not found"}

@@ -2,38 +2,43 @@ from fastapi import FastAPI, Request
 from fastapi.responses import FileResponse
 import pandas as pd
 import os
+import logging
 
 app = FastAPI()
-
-# Directorio temporal en Railway para guardar los archivos
 UPLOAD_FOLDER = "/tmp"
+
+logging.basicConfig(level=logging.INFO)
 
 @app.post("/generate_excel")
 async def generate_excel(request: Request):
-    data = await request.json()
-    incidents = data.get("incidents", [])
+    try:
+        data = await request.json()
+        logging.info(f"Received data: {len(data.get('incidents', []))} incidents")  
 
-    if not incidents:
-        return {"error": "No incidents received"}
+        incidents = data.get("incidents", [])
+        if not incidents:
+            return {"error": "No incidents received"}
 
-    # Convert incidents to DataFrame
-    file_path = os.path.join(UPLOAD_FOLDER, "incident_report.xlsx")
-    df = pd.DataFrame(incidents)
-    df.to_excel(file_path, index=False)
+        file_path = os.path.join(UPLOAD_FOLDER, "incident_report.xlsx")
 
-    # Obtener la URL real de Railway en tiempo de ejecución
-    server_url = request.base_url._url.rstrip("/")
+        # Guardar en chunks para evitar consumo excesivo de memoria
+        chunk_size = 500  # Procesar de 500 en 500 registros
+        for i in range(0, len(incidents), chunk_size):
+            df = pd.DataFrame(incidents[i:i+chunk_size])
+            df.to_excel(file_path, index=False, mode='a', header=not os.path.exists(file_path))
 
-    # Generar enlace de descarga dinámico
-    download_link = f"{server_url}/download/incident_report.xlsx"
+        # Generar enlace de descarga
+        download_link = f"https://koreai-production.up.railway.app/download/incident_report.xlsx"
 
-    return {"file_url": download_link}
+        return {"file_url": download_link}
+
+    except Exception as e:
+        logging.error(f"Error processing request: {str(e)}")
+        return {"error": "Internal Server Error", "details": str(e)}
 
 @app.get("/download/{filename}")
 async def download_file(filename: str):
     file_path = os.path.join(UPLOAD_FOLDER, filename)
-    
     if os.path.exists(file_path):
-        return FileResponse(file_path, filename=filename, media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
-    
+        return FileResponse(file_path, filename=filename, media_type="application/vnd.ms-excel")
     return {"error": "File not found"}

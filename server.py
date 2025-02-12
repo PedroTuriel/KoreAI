@@ -1,44 +1,42 @@
 from fastapi import FastAPI, Request
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 import pandas as pd
 import os
-import logging
 
 app = FastAPI()
-UPLOAD_FOLDER = "/tmp"
 
-logging.basicConfig(level=logging.INFO)
+# Directorio seguro en Railway para guardar archivos temporalmente
+UPLOAD_FOLDER = "/tmp"
 
 @app.post("/generate_excel")
 async def generate_excel(request: Request):
     try:
         data = await request.json()
-        logging.info(f"Received data: {len(data.get('incidents', []))} incidents")  
+        incidents = data.get("body", {}).get("result", [])
 
-        incidents = data.get("incidents", [])
         if not incidents:
-            return {"error": "No incidents received"}
+            return JSONResponse(status_code=400, content={"error": "No incidents received"})
 
+        # Convert incidents to DataFrame
+        df = pd.DataFrame(incidents)
+
+        # Ruta del archivo
         file_path = os.path.join(UPLOAD_FOLDER, "incident_report.xlsx")
 
-        # Guardar en chunks para evitar consumo excesivo de memoria
-        chunk_size = 500  # Procesar de 500 en 500 registros
-        for i in range(0, len(incidents), chunk_size):
-            df = pd.DataFrame(incidents[i:i+chunk_size])
-            df.to_excel(file_path, index=False, mode='a', header=not os.path.exists(file_path))
+        # Guardar en formato Excel
+        df.to_excel(file_path, index=False, engine='openpyxl')
 
-        # Generar enlace de descarga
+        # Generar enlace de descarga desde Railway
         download_link = f"https://koreai-production.up.railway.app/download/incident_report.xlsx"
 
-        return {"file_url": download_link}
+        return JSONResponse(status_code=200, content={"file_url": download_link})
 
     except Exception as e:
-        logging.error(f"Error processing request: {str(e)}")
-        return {"error": "Internal Server Error", "details": str(e)}
+        return JSONResponse(status_code=500, content={"error": "Internal Server Error", "details": str(e)})
 
 @app.get("/download/{filename}")
 async def download_file(filename: str):
     file_path = os.path.join(UPLOAD_FOLDER, filename)
     if os.path.exists(file_path):
         return FileResponse(file_path, filename=filename, media_type="application/vnd.ms-excel")
-    return {"error": "File not found"}
+    return JSONResponse(status_code=404, content={"error": "File not found"})

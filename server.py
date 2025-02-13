@@ -23,21 +23,24 @@ STATE_MAPPING = {
 async def generate_excel(request: Request):
     try:
         data = await request.json()
-        
-        # Kore.ai envía los incidentes en una lista dentro del JSON
-        incidents = data.get("incidents", [])
+
+        # Determinar si la raíz de la solicitud es directamente una lista
+        if isinstance(data, list):  
+            incidents = data  # Es una lista, usarla directamente
+        else:
+            incidents = data.get("incidents", [])  # Si no, buscar dentro de "incidents"
 
         if not incidents:
             return JSONResponse(status_code=400, content={"error": "No incidents received"})
 
-        # Normalizar los datos para evitar problemas de nombres de campos
+        # Normalizar los datos
         processed_incidents = []
         for incident in incidents:
             processed_incidents.append({
-                "sys_id": incident.get("sysid") or incident.get("sys_id", ""),  # Asegura que sys_id se capture correctamente
+                "sys_id": incident.get("sysid") or incident.get("sys_id", ""),  # Asegurar sys_id
                 "number": incident.get("number", ""),
-                "short_description": incident.get("short_description") or incident.get("shortdescription") or incident.get("short description", ""),  # Normaliza el campo short_description
-                "state": STATE_MAPPING.get(str(incident.get("state", "")), "Unknown")  # Traduce el estado al nombre correspondiente
+                "short_description": incident.get("short_description") or incident.get("shortdescription") or incident.get("short description", ""),  # Normaliza descripción
+                "state": STATE_MAPPING.get(str(incident.get("state", "")), "Unknown")  # Mapear estados
             })
 
         # Convertir a DataFrame
@@ -49,7 +52,7 @@ async def generate_excel(request: Request):
         # Guardar en formato Excel
         df.to_excel(file_path, index=False, engine='openpyxl')
 
-        # Generar enlace de descarga desde Railway
+        # Generar enlace de descarga
         download_link = f"https://koreai-production.up.railway.app/download/incident_report.xlsx"
 
         return JSONResponse(status_code=200, content={"file_url": download_link})

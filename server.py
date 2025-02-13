@@ -12,13 +12,25 @@ UPLOAD_FOLDER = "/tmp"
 async def generate_excel(request: Request):
     try:
         data = await request.json()
-        incidents = data.get("body", {}).get("result", [])
+
+        # Verificar si los datos vienen en un array directo
+        incidents = data if isinstance(data, list) else data.get("body", {}).get("result", [])
 
         if not incidents:
             return JSONResponse(status_code=400, content={"error": "No incidents received"})
 
+        # Normalizar los nombres de las claves en cada incidente
+        normalized_incidents = []
+        for incident in incidents:
+            normalized_incidents.append({
+                "sys_id": incident.get("sysid") or incident.get("sys id", ""),
+                "number": incident.get("number", ""),
+                "short_description": incident.get("short description") or incident.get("shortdescription", ""),
+                "state": incident.get("state", "")
+            })
+
         # Convert incidents to DataFrame
-        df = pd.DataFrame(incidents)
+        df = pd.DataFrame(normalized_incidents)
 
         # Ruta del archivo
         file_path = os.path.join(UPLOAD_FOLDER, "incident_report.xlsx")

@@ -8,29 +8,40 @@ app = FastAPI()
 # Directorio seguro en Railway para guardar archivos temporalmente
 UPLOAD_FOLDER = "/tmp"
 
+# Mapeo de estados numéricos a nombres
+STATE_MAPPING = {
+    "1": "New",
+    "-5": "Assigned",
+    "2": "In Progress",
+    "3": "On Hold",
+    "6": "Resolved",
+    "8": "Canceled",
+    "7": "Closed"
+}
+
 @app.post("/generate_excel")
 async def generate_excel(request: Request):
     try:
         data = await request.json()
-
-        # Verificar si los datos vienen en un array directo
-        incidents = data if isinstance(data, list) else data.get("body", {}).get("result", [])
+        
+        # Kore.ai envía los incidentes en una lista dentro del JSON
+        incidents = data.get("incidents", [])
 
         if not incidents:
             return JSONResponse(status_code=400, content={"error": "No incidents received"})
 
-        # Normalizar los nombres de las claves en cada incidente
-        normalized_incidents = []
+        # Normalizar los datos para evitar problemas de nombres de campos
+        processed_incidents = []
         for incident in incidents:
-            normalized_incidents.append({
-                "sys_id": incident.get("sysid") or incident.get("sys id", ""),
+            processed_incidents.append({
+                "sys_id": incident.get("sysid") or incident.get("sys_id", ""),  # Asegura que sys_id se capture correctamente
                 "number": incident.get("number", ""),
-                "short_description": incident.get("short description") or incident.get("shortdescription", ""),
-                "state": incident.get("state", "")
+                "short_description": incident.get("short_description") or incident.get("shortdescription") or incident.get("short description", ""),  # Normaliza el campo short_description
+                "state": STATE_MAPPING.get(str(incident.get("state", "")), "Unknown")  # Traduce el estado al nombre correspondiente
             })
 
-        # Convert incidents to DataFrame
-        df = pd.DataFrame(normalized_incidents)
+        # Convertir a DataFrame
+        df = pd.DataFrame(processed_incidents)
 
         # Ruta del archivo
         file_path = os.path.join(UPLOAD_FOLDER, "incident_report.xlsx")

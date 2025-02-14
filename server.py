@@ -1,10 +1,10 @@
+import os
+import uvicorn
 from fastapi import FastAPI, File, UploadFile
 import shutil
-import os
 
 app = FastAPI()
 
-# Directorio donde se guardarán los archivos
 UPLOAD_DIR = "uploads"
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
@@ -19,9 +19,13 @@ async def upload_file(file: UploadFile = File(...)):
     with open(file_location, "wb") as buffer:
         shutil.copyfileobj(file.file, buffer)
 
-    return {"file_url": f"https://tu-servidor-railway.app/files/{file.filename}"}
+    return {"file_url": f"https://web-production-82ea.up.railway.app/files/{file.filename}"}
 
 @app.get("/files/{filename}")
 async def get_file(filename: str):
     """ Genera la URL del archivo almacenado """
-    return {"download_url": f"https://tu-servidor-railway.app/files/{filename}"}
+    return {"download_url": f"https://web-production-82ea.up.railway.app/files/{filename}"}
+
+if __name__ == "__main__":
+    port = int(os.getenv("PORT", 8000))  # Usa el puerto dinámico de Railway
+    uvicorn.run(app, host="0.0.0.0", port=port)
